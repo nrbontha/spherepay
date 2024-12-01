@@ -1,13 +1,14 @@
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, BackgroundTasks
-from datetime import datetime
+from datetime import datetime, UTC
 import asyncio
 
 from ..models.transaction import Transaction, TransactionStatus
 from ..schemas.transaction import TransactionRequest
 from .fx_rate import FxRateService
 from ..database import SessionLocal
+from .liquidity_pool import LiquidityPoolService
 
 MARGIN_RATE = Decimal('0.001')  # 0.1%
 SETTLEMENT_TIMES = {
@@ -22,6 +23,7 @@ class TransactionService:
     def __init__(self, db: Session):
         self.db = db
         self.fx_rate_service = FxRateService(db)
+        self.liquidity_pool_service = LiquidityPoolService(db)
 
     async def process_settlement(self, transaction_id: int):
         db = SessionLocal()
@@ -30,17 +32,42 @@ class TransactionService:
             if not transaction:
                 return
             
-            # Update to processing
-            transaction.status = TransactionStatus.PROCESSING
-            db.commit()
+            liquidity_pool_service = LiquidityPoolService(db)
             
-            # Wait for settlement time
+            # Check and reserve funds
+            try:
+                liquidity_pool_service.reserve_funds(
+                    transaction.source_currency, 
+                    transaction.source_amount
+                )
+                transaction.status = TransactionStatus.PROCESSING
+                db.commit()
+            except HTTPException as e:
+                transaction.status = TransactionStatus.FAILED
+                db.commit()
+                return
+            
+            # Wait for source currency settlement
             await asyncio.sleep(SETTLEMENT_TIMES[transaction.source_currency])
             
-            # Update to completed
-            transaction.status = TransactionStatus.COMPLETED
-            transaction.settled_at = datetime.utcnow()
-            db.commit()
+            # Wait for target currency settlement
+            await asyncio.sleep(SETTLEMENT_TIMES[transaction.target_currency])
+            
+            # Settle the transaction
+            try:
+                liquidity_pool_service.settle_transaction(
+                    transaction.source_currency,
+                    transaction.target_currency,
+                    transaction.source_amount,
+                    transaction.target_amount
+                )
+                transaction.status = TransactionStatus.COMPLETED
+                transaction.settled_at = datetime.now(UTC)
+                db.commit()
+            except Exception as e:
+                transaction.status = TransactionStatus.FAILED
+                db.commit()
+                raise e
             
         finally:
             db.close()
@@ -87,4 +114,4 @@ class TransactionService:
         transaction = self.db.query(Transaction).filter(Transaction.id == transaction_id).first()
         if not transaction:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        return transaction 
+        return transaction
