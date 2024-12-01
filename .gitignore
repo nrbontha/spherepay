@@ -21,9 +21,14 @@ wheels/
 *.egg
 
 # Virtual Environment
+.venv/
 venv/
 env/
 ENV/
+
+# Poetry
+poetry.lock    # Optional: some teams commit this file
+dist/
 
 # IDE
 .idea/

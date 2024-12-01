@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ class FxRateUpdate(BaseModel):
     rate: str
     timestamp: datetime
 
-    @validator('pair')
+    @field_validator('pair')
     def validate_currency_pair(cls, pair):
         try:
             base, quote = pair.split('/')
@@ -29,7 +29,7 @@ class FxRateUpdate(BaseModel):
         except ValueError as e:
             raise ValueError(f"Invalid currency pair format. Error: {str(e)}")
 
-    @validator('rate')
+    @field_validator('rate')
     def validate_rate(cls, rate):
         try:
             rate_decimal = Decimal(rate)
