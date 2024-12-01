@@ -22,5 +22,4 @@ class Transaction(Base):
     revenue = Column(Numeric(precision=20, scale=6), nullable=False)
     status = Column(Enum(TransactionStatus), nullable=False, default=TransactionStatus.PENDING)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     settled_at = Column(DateTime(timezone=True)) 
