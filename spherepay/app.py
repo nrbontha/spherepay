@@ -1,13 +1,22 @@
 from fastapi import FastAPI, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
+import asyncio
+from contextlib import asynccontextmanager
 
 from .database import get_db
 from .schemas.fx_rate import FxRateUpdate
 from .schemas.transaction import TransactionRequest
 from .services.fx_rate import FxRateService
 from .services.transaction import TransactionService
+from .tasks import rebalance_pools_task
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    rebalance_task = asyncio.create_task(rebalance_pools_task())
+    yield
+    rebalance_task.cancel()
+
+app = FastAPI(lifespan=lifespan)
 
 @app.post("/fx-rate")
 async def update_fx_rate(
