@@ -8,6 +8,7 @@ from ..models.liquidity_pool import LiquidityPool
 from ..services.fx_rate import FxRateService
 from ..models.transaction import Transaction
 from .. import config
+from ..logger import logger
 
 class LiquidityPoolService:
     # Rebalancing thresholds
@@ -21,15 +22,30 @@ class LiquidityPoolService:
 
     def check_liquidity(self, currency: str, amount: Decimal) -> bool:
         """Check if there's enough available liquidity for a transaction"""
-        pool = self.db.query(LiquidityPool)\
-            .filter(LiquidityPool.currency == currency)\
-            .first()
-        
-        if not pool:
-            raise HTTPException(status_code=400, detail=f"No liquidity pool for {currency}")
-        
-        available = pool.balance - pool.reserved_balance
-        return available >= amount
+        try:
+            pool = self.db.query(LiquidityPool)\
+                .filter(LiquidityPool.currency == currency)\
+                .first()
+            
+            if not pool:
+                logger.error(f"No liquidity pool for {currency}")
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"No liquidity pool for {currency}"
+                )
+            
+            available = pool.balance - pool.reserved_balance
+            if available < amount:
+                logger.warning(
+                    f"Insufficient liquidity in {currency}. "
+                    f"Required: {amount}, Available: {available}"
+                )
+                
+            return available >= amount
+            
+        except Exception as e:
+            logger.error(f"Error checking liquidity: {str(e)}")
+            raise
 
     def reserve_funds(self, currency: str, amount: Decimal):
         """Reserve funds for a pending transaction"""
