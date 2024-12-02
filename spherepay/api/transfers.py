@@ -1,54 +1,13 @@
-from fastapi import FastAPI, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
-import asyncio
-from contextlib import asynccontextmanager
 
-from .database import get_db
-from .schemas.fx_rate import FxRateUpdate
-from .schemas.transaction import TransactionRequest
-from .services.fx_rate import FxRateService
-from .services.transaction import TransactionService
-from .tasks import rebalance_pools_task
+from ..database import get_db
+from ..schemas.transaction import TransactionRequest
+from ..services.transaction import TransactionService
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    rebalance_task = asyncio.create_task(rebalance_pools_task())
-    yield
-    rebalance_task.cancel()
+router = APIRouter()
 
-app = FastAPI(lifespan=lifespan)
-
-@app.post("/fx-rate")
-async def update_fx_rate(
-    rate_update: FxRateUpdate, 
-    db: Session = Depends(get_db)
-):
-    fx_service = FxRateService(db)
-    fx_rate = fx_service.create_rate(rate_update)
-    return {
-        "status": "success",
-        "data": {
-            "pair": fx_rate.currency_pair,
-            "rate": str(fx_rate.rate),
-            "timestamp": fx_rate.timestamp
-        }
-    }
-
-@app.get("/fx-rate/{base}-{quote}")
-async def get_latest_rate(
-    base: str, 
-    quote: str,
-    db: Session = Depends(get_db)
-):
-    fx_service = FxRateService(db)
-    latest_rate = fx_service.get_latest_rate(base, quote)
-    return {
-        "pair": latest_rate.currency_pair,
-        "rate": str(latest_rate.rate),
-        "timestamp": latest_rate.timestamp
-    }
-
-@app.post("/transfer")
+@router.post("/transfer")
 async def create_transfer(
     request: TransactionRequest,
     background_tasks: BackgroundTasks,
@@ -72,11 +31,8 @@ async def create_transfer(
         }
     }
 
-@app.get("/transfer/{transfer_id}")
-async def get_transfer(
-    transfer_id: int,
-    db: Session = Depends(get_db)
-):
+@router.get("/transfer/{transfer_id}")
+async def get_transfer(transfer_id: int, db: Session = Depends(get_db)):
     transaction_service = TransactionService(db)
     transaction = transaction_service.get_transaction(transfer_id)
     return {
@@ -93,4 +49,4 @@ async def get_transfer(
             "created_at": transaction.created_at,
             "settled_at": transaction.settled_at
         }
-    }
+    } 
