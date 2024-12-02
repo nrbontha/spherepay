@@ -11,12 +11,6 @@ from .. import config
 from ..logger import logger
 
 class LiquidityPoolService:
-    # Rebalancing thresholds
-    HIGH_UTILIZATION_THRESHOLD = Decimal('0.7')  # 70%
-    LOW_UTILIZATION_THRESHOLD = Decimal('0.3')   # 30%
-    REBALANCE_BUFFER_MULTIPLIER = Decimal('1.5') # 50% extra
-    METRICS_WINDOW_HOURS = 24                    # Look at last 24h
-
     def __init__(self, db: Session):
         self.db = db
 
