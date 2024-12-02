@@ -28,5 +28,5 @@ INITIAL_BALANCES = {
 REBALANCE_HIGH_UTILIZATION = Decimal("0.7")    # 70%
 REBALANCE_LOW_UTILIZATION = Decimal("0.3")     # 30%
 REBALANCE_BUFFER_MULTIPLIER = Decimal("1.5")   # 50% extra
-REBALANCE_INTERVAL_SECONDS = 3600              # 1 hour
-METRICS_WINDOW_HOURS = 24                      # 24 hour window 
+REBALANCE_INTERVAL_SECONDS = 60                # 1 minute
+METRICS_WINDOW_HOURS = 1                       # 1 hour window
