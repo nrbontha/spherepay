@@ -10,6 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import table, column
+from spherepay import config
 
 
 # revision identifiers, used by Alembic.
@@ -27,34 +28,18 @@ def upgrade():
         column('reserved_balance', sa.Numeric)
     )
 
-    # Insert initial balances
-    op.bulk_insert(liquidity_pools, [
-        {
-            'currency': 'USD',
-            'balance': 1000000,
-            'reserved_balance': 0
-        },
-        {
-            'currency': 'EUR',
-            'balance': 921658,
-            'reserved_balance': 0
-        },
-        {
-            'currency': 'JPY',
-            'balance': 109890110,
-            'reserved_balance': 0
-        },
-        {
-            'currency': 'GBP',
-            'balance': 750000,
-            'reserved_balance': 0
-        },
-        {
-            'currency': 'AUD',
-            'balance': 1349528,
-            'reserved_balance': 0
-        }
-    ])
+    # Insert initial pool balances
+    op.bulk_insert(
+        liquidity_pools,
+        [
+            {
+                "currency": currency,
+                "balance": balance,
+                "reserved_balance": 0
+            }
+            for currency, balance in config.INITIAL_BALANCES.items()
+        ]
+    )
 
 def downgrade():
     op.execute("DELETE FROM liquidity_pools")
