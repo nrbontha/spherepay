@@ -7,6 +7,7 @@ from datetime import datetime, UTC, timedelta
 from ..models.liquidity_pool import LiquidityPool
 from ..services.fx_rate import FxRateService
 from ..models.transaction import Transaction
+from .. import config
 
 class LiquidityPoolService:
     # Rebalancing thresholds
@@ -68,7 +69,7 @@ class LiquidityPoolService:
         
         self.db.commit() 
 
-    def get_pool_metrics(self, currency: str, hours: int = METRICS_WINDOW_HOURS) -> dict:
+    def get_pool_metrics(self, currency: str, hours: int = config.METRICS_WINDOW_HOURS) -> dict:
         """Analyze pool's transaction patterns"""
         since = datetime.now(UTC) - timedelta(hours=hours)
         
@@ -129,13 +130,13 @@ class LiquidityPoolService:
         # Check each pool for rebalancing needs
         for currency, metric in metrics.items():
             # Pool needs more liquidity if high utilization or negative net flow
-            if (metric['utilization_rate'] > self.HIGH_UTILIZATION_THRESHOLD or 
+            if (metric['utilization_rate'] > config.REBALANCE_HIGH_UTILIZATION or 
                 metric['net_flow'] < 0):
                 # Find a pool with excess liquidity to transfer from
                 for other_currency, other_metric in metrics.items():
                     if (other_currency != currency and 
-                        other_metric['utilization_rate'] < self.LOW_UTILIZATION_THRESHOLD):
+                        other_metric['utilization_rate'] < config.REBALANCE_LOW_UTILIZATION):
                         # Transfer net flow amount plus 50% buffer
-                        required_amount = abs(metric['net_flow']) * self.REBALANCE_BUFFER_MULTIPLIER
+                        required_amount = abs(metric['net_flow']) * config.REBALANCE_BUFFER_MULTIPLIER
                         self.internal_rebalance(other_currency, currency, required_amount)
                         break  # Only rebalance once per currency

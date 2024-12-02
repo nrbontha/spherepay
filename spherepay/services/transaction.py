@@ -9,15 +9,7 @@ from ..schemas.transaction import TransactionRequest
 from .fx_rate import FxRateService
 from ..database import SessionLocal
 from .liquidity_pool import LiquidityPoolService
-
-MARGIN_RATE = Decimal('0.001')  # 0.1%
-SETTLEMENT_TIMES = {
-    'USD': 3,
-    'EUR': 2,
-    'JPY': 3,
-    'GBP': 2,
-    'AUD': 3
-}
+from .. import config
 
 class TransactionService:
     def __init__(self, db: Session):
@@ -48,10 +40,10 @@ class TransactionService:
                 return
             
             # Wait for source currency settlement
-            await asyncio.sleep(SETTLEMENT_TIMES[transaction.source_currency])
+            await asyncio.sleep(config.SETTLEMENT_TIMES[transaction.source_currency])
             
             # Wait for target currency settlement
-            await asyncio.sleep(SETTLEMENT_TIMES[transaction.target_currency])
+            await asyncio.sleep(config.SETTLEMENT_TIMES[transaction.target_currency])
             
             # Settle the transaction
             try:
@@ -83,7 +75,7 @@ class TransactionService:
             
             # Calculate target amount with margin
             base_target_amount = source_amount * Decimal(str(fx_rate.rate))
-            margin_amount = base_target_amount * MARGIN_RATE
+            margin_amount = base_target_amount * config.TRANSACTION_MARGIN_RATE
             final_target_amount = base_target_amount - margin_amount
             
             # Create transaction
