@@ -49,41 +49,61 @@ class LiquidityPoolService:
 
     def reserve_funds(self, currency: str, amount: Decimal):
         """Reserve funds for a pending transaction"""
-        pool = self.db.query(LiquidityPool)\
-            .filter(LiquidityPool.currency == currency)\
-            .first()
-        
-        if not pool:
-            raise HTTPException(status_code=400, detail=f"No liquidity pool for {currency}")
-        
-        available = pool.balance - pool.reserved_balance
-        if available < amount:
-            raise HTTPException(status_code=400, detail=f"Insufficient liquidity in {currency}")
-        
-        pool.reserved_balance += amount
-        self.db.commit()
+        try:
+            pool = self.db.query(LiquidityPool)\
+                .filter(LiquidityPool.currency == currency)\
+                .first()
+            
+            if not pool:
+                logger.error(f"No liquidity pool found for {currency}")
+                raise HTTPException(status_code=400, detail=f"No liquidity pool for {currency}")
+            
+            available = pool.balance - pool.reserved_balance
+            if available < amount:
+                logger.error(f"Insufficient liquidity in {currency}. Required: {amount}, Available: {available}")
+                raise HTTPException(status_code=400, detail=f"Insufficient liquidity in {currency}")
+            
+            pool.reserved_balance += amount
+            self.db.commit()
+            logger.info(f"Reserved {amount} {currency}")
+            
+        except Exception as e:
+            logger.error(f"Error reserving funds: {str(e)}")
+            self.db.rollback()
+            raise
 
     def settle_transaction(self, source_currency: str, target_currency: str, 
                          source_amount: Decimal, target_amount: Decimal):
         """Update balances after transaction settlement"""
-        source_pool = self.db.query(LiquidityPool)\
-            .filter(LiquidityPool.currency == source_currency)\
-            .first()
-        target_pool = self.db.query(LiquidityPool)\
-            .filter(LiquidityPool.currency == target_currency)\
-            .first()
-        
-        if not source_pool or not target_pool:
-            raise HTTPException(status_code=400, detail="Invalid currency pools")
-        
-        # Release reserved amount and deduct from source pool
-        source_pool.reserved_balance -= source_amount
-        source_pool.balance -= source_amount
-        
-        # Add to target pool
-        target_pool.balance += target_amount
-        
-        self.db.commit() 
+        try:
+            source_pool = self.db.query(LiquidityPool)\
+                .filter(LiquidityPool.currency == source_currency)\
+                .first()
+            target_pool = self.db.query(LiquidityPool)\
+                .filter(LiquidityPool.currency == target_currency)\
+                .first()
+            
+            if not source_pool or not target_pool:
+                logger.error("Invalid currency pools")
+                raise HTTPException(status_code=400, detail="Invalid currency pools")
+            
+            # Release reserved amount and deduct from source pool
+            source_pool.reserved_balance -= source_amount
+            source_pool.balance -= source_amount
+            
+            # Add to target pool
+            target_pool.balance += target_amount
+            
+            self.db.commit()
+            logger.info(
+                f"Settled transaction: {source_amount} {source_currency} -> "
+                f"{target_amount} {target_currency}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error settling transaction: {str(e)}")
+            self.db.rollback()
+            raise
 
     def get_pool_metrics(self, currency: str, hours: int = config.METRICS_WINDOW_HOURS) -> dict:
         """Analyze pool's transaction patterns"""
@@ -116,26 +136,37 @@ class LiquidityPoolService:
 
     def internal_rebalance(self, from_currency: str, to_currency: str, amount: Decimal):
         """Execute internal bank transfer between pools"""
-        from_pool = self.db.query(LiquidityPool)\
-            .filter(LiquidityPool.currency == from_currency)\
-            .first()
-        to_pool = self.db.query(LiquidityPool)\
-            .filter(LiquidityPool.currency == to_currency)\
-            .first()
+        try:
+            from_pool = self.db.query(LiquidityPool)\
+                .filter(LiquidityPool.currency == from_currency)\
+                .first()
+            to_pool = self.db.query(LiquidityPool)\
+                .filter(LiquidityPool.currency == to_currency)\
+                .first()
 
-        if not from_pool or not to_pool:
-            raise ValueError("Invalid currency pools")
+            if not from_pool or not to_pool:
+                logger.error(f"Invalid currency pools: {from_currency}, {to_currency}")
+                raise ValueError("Invalid currency pools")
 
-        # Get current FX rate (no margin for internal transfers)
-        fx_rate_service = FxRateService(self.db)
-        rate = fx_rate_service.get_latest_rate(from_currency, to_currency)
-        converted_amount = amount * Decimal(str(rate.rate))
+            # Get current FX rate (no margin for internal transfers)
+            fx_rate_service = FxRateService(self.db)
+            rate = fx_rate_service.get_latest_rate(from_currency, to_currency)
+            converted_amount = amount * Decimal(str(rate.rate))
 
-        # Direct balance updates
-        from_pool.balance -= amount
-        to_pool.balance += converted_amount
-        
-        self.db.commit()
+            # Direct balance updates
+            from_pool.balance -= amount
+            to_pool.balance += converted_amount
+            
+            self.db.commit()
+            logger.info(
+                f"Internal rebalance: {amount} {from_currency} -> "
+                f"{converted_amount} {to_currency}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error during internal rebalance: {str(e)}")
+            self.db.rollback()
+            raise
 
     def rebalance_pools(self):
         """Analyze and rebalance all pools"""

@@ -13,20 +13,20 @@ class FxRateService:
 
     def create_rate(self, rate_update: FxRateUpdate) -> FxRate:
         try:
-            rate_decimal = Decimal(rate_update.rate)
             fx_rate = FxRate(
                 currency_pair=rate_update.pair,
-                rate=rate_decimal,
+                rate=Decimal(rate_update.rate),
                 timestamp=rate_update.timestamp
             )
-            
             self.db.add(fx_rate)
             self.db.commit()
-            
+            logger.info(f"Created new FX rate: {rate_update.pair} = {rate_update.rate}")
             return fx_rate
+
         except Exception as e:
+            logger.error(f"Error creating FX rate: {str(e)}")
             self.db.rollback()
-            raise HTTPException(status_code=400, detail=str(e))
+            raise
 
     def get_latest_rate(self, base: str, quote: str) -> FxRate:
         try:
