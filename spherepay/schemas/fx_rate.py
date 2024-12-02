@@ -1,8 +1,9 @@
 from pydantic import BaseModel, field_validator
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from .. import config
 
-SUPPORTED_CURRENCIES = {'USD', 'EUR', 'JPY', 'GBP', 'AUD'}
+SUPPORTED_CURRENCIES = list(config.INITIAL_BALANCES.keys())
 
 class FxRateUpdate(BaseModel):
     pair: str

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional
 from ..models.transaction import TransactionStatus
 
+
 class TransactionRequest(BaseModel):
     source_currency: str
     target_currency: str
@@ -24,6 +25,7 @@ class TransactionRequest(BaseModel):
             return v
         except Exception as e:
             raise ValueError(f"Invalid amount format: {str(e)}")
+
 
 class TransactionResponse(BaseModel):
     id: int

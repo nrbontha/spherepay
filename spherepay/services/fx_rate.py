@@ -4,8 +4,9 @@ from fastapi import HTTPException
 from datetime import datetime, UTC
 
 from ..models.fx_rate import FxRate
-from ..schemas.fx_rate import FxRateUpdate, SUPPORTED_CURRENCIES
+from ..schemas.fx_rate import FxRateUpdate
 from ..logger import logger
+
 
 class FxRateService:
     def __init__(self, db: Session):

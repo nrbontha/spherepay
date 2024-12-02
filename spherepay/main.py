@@ -5,6 +5,7 @@ import asyncio
 from .tasks import rebalance_pools_task
 from .api import fx_rates, transfers
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     rebalance_task = asyncio.create_task(rebalance_pools_task())

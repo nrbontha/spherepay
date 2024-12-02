@@ -4,11 +4,12 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from datetime import datetime, UTC, timedelta
 
-from ..models.liquidity_pool import LiquidityPool
-from ..services.fx_rate import FxRateService
-from ..models.transaction import Transaction
 from .. import config
 from ..logger import logger
+from ..models.liquidity_pool import LiquidityPool
+from ..models.transaction import Transaction
+from ..services.fx_rate import FxRateService
+
 
 class LiquidityPoolService:
     def __init__(self, db: Session):
@@ -142,7 +143,12 @@ class LiquidityPoolService:
                 logger.error(f"Invalid currency pools: {from_currency}, {to_currency}")
                 raise ValueError("Invalid currency pools")
 
-            # Get current FX rate (no margin for internal transfers)
+            # Check if source pool has sufficient balance
+            if from_pool.balance < amount:
+                logger.warning(f"Insufficient balance in {from_currency} pool for rebalance")
+                return
+
+            # Get current FX rate
             fx_rate_service = FxRateService(self.db)
             rate = fx_rate_service.get_latest_rate(from_currency, to_currency)
             converted_amount = amount * Decimal(str(rate.rate))
@@ -164,20 +170,34 @@ class LiquidityPoolService:
 
     def rebalance_pools(self):
         """Analyze and rebalance all pools"""
-        # Get all currency pools and their metrics (volume, utilization etc)
         pools = self.db.query(LiquidityPool).all()
         metrics = {p.currency: self.get_pool_metrics(p.currency) for p in pools}
+        fx_service = FxRateService(self.db)
         
-        # Check each pool for rebalancing needs
         for currency, metric in metrics.items():
-            # Pool needs more liquidity if high utilization or negative net flow
             if (metric['utilization_rate'] > config.REBALANCE_HIGH_UTILIZATION or 
                 metric['net_flow'] < 0):
-                # Find a pool with excess liquidity to transfer from
                 for other_currency, other_metric in metrics.items():
                     if (other_currency != currency and 
                         other_metric['utilization_rate'] < config.REBALANCE_LOW_UTILIZATION):
-                        # Transfer net flow amount plus 50% buffer
-                        required_amount = abs(metric['net_flow']) * config.REBALANCE_BUFFER_MULTIPLIER
-                        self.internal_rebalance(other_currency, currency, required_amount)
-                        break  # Only rebalance once per currency
+                        # Calculate required amount in target currency (currency)
+                        target_required = abs(metric['net_flow']) * config.REBALANCE_BUFFER_MULTIPLIER
+                        
+                        # Convert to source currency (other_currency)
+                        rate = fx_service.get_latest_rate(currency, other_currency)
+                        source_required = target_required * Decimal(str(rate.rate))
+                        
+                        # Get source pool's available balance
+                        source_pool = self.db.query(LiquidityPool)\
+                            .filter(LiquidityPool.currency == other_currency)\
+                            .first()
+                        
+                        # Limit transfer amount to available balance
+                        transfer_amount = min(
+                            source_required,  # Now this is in source currency
+                            source_pool.balance * Decimal('0.5')  # Don't transfer more than 50% of source pool
+                        )
+                        
+                        if transfer_amount > 0:
+                            self.internal_rebalance(other_currency, currency, transfer_amount)
+                        break
