@@ -15,8 +15,6 @@ from ..logger import logger
 class TransactionService:
     def __init__(self, db: Session):
         self.db = db
-        self.fx_rate_service = FxRateService(db)
-        self.liquidity_pool_service = LiquidityPoolService(db)
 
     async def process_settlement(self, transaction_id: int):
         db = SessionLocal()
@@ -30,10 +28,13 @@ class TransactionService:
             
             # Reserve funds
             try:
-                self.liquidity_pool_service.reserve_funds(
+                liquidity_service = LiquidityPoolService(db)
+                liquidity_service.reserve_funds(
                     transaction.source_currency, 
                     transaction.source_amount
                 )
+                transaction.status = TransactionStatus.PROCESSING
+                db.commit()
                 logger.info(f"Reserved funds for transaction {transaction_id}")
             except HTTPException as e:
                 logger.error(f"Failed to reserve funds: {str(e)}")
@@ -47,12 +48,15 @@ class TransactionService:
             await asyncio.sleep(config.SETTLEMENT_TIMES[transaction.target_currency])
             
             try:
-                self.liquidity_pool_service.settle_transaction(
+                liquidity_service.settle_transaction(
                     transaction.source_currency,
                     transaction.target_currency,
                     transaction.source_amount,
                     transaction.target_amount
                 )
+                transaction.status = TransactionStatus.COMPLETED
+                transaction.settled_at = datetime.now(UTC)
+                db.commit()
                 logger.info(f"Settlement completed for transaction {transaction_id}")
             except Exception as e:
                 logger.error(f"Settlement failed: {str(e)}")
@@ -70,7 +74,9 @@ class TransactionService:
                 f"Amount: {request.source_amount}"
             )
             
-            fx_rate = self.fx_rate_service.get_latest_rate(
+            # Use local instance of FxRateService
+            fx_rate_service = FxRateService(self.db)
+            fx_rate = fx_rate_service.get_latest_rate(
                 request.source_currency, 
                 request.target_currency
             )

@@ -30,4 +30,9 @@ class FxRateUpdate(BaseModel):
                 raise ValueError("Rate must be positive")
             return rate
         except (ValueError, InvalidOperation) as e:
-            raise ValueError(f"Invalid rate format: {str(e)}") 
+            raise ValueError(f"Invalid rate format: {str(e)}")
+
+class FxRateResponse(BaseModel):
+    pair: str
+    rate: str
+    timestamp: datetime
