@@ -83,12 +83,13 @@ class TransactionService:
             )
             
             source_amount = Decimal(request.source_amount)
-            
+
             # Calculate target amount with margin
             base_target_amount = source_amount * Decimal(str(fx_rate.rate))
-            margin_amount = base_target_amount * config.TRANSACTION_MARGIN_RATE
+            margin = config.TRANSACTION_MARGIN_RATE
+            margin_amount = base_target_amount * margin
             final_target_amount = base_target_amount - margin_amount
-            
+
             # Create transaction
             transaction = Transaction(
                 source_currency=request.source_currency,
@@ -96,7 +97,7 @@ class TransactionService:
                 source_amount=source_amount,
                 target_amount=final_target_amount,
                 fx_rate=fx_rate.rate,
-                margin=margin_amount,
+                margin=margin,
                 revenue=margin_amount,
                 status=TransactionStatus.PENDING
             )
