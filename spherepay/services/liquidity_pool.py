@@ -83,11 +83,11 @@ class LiquidityPoolService:
                 raise HTTPException(status_code=400, detail="Invalid currency pools")
             
             # Release reserved amount and deduct from source pool
-            source_pool.reserved_balance -= source_amount
-            source_pool.balance -= source_amount
+            target_pool.reserved_balance -= target_amount
+            target_pool.balance -= target_amount
             
             # Add to target pool
-            target_pool.balance += target_amount
+            source_pool.balance += source_amount
             
             self.db.commit()
             logger.info(

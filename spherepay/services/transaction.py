@@ -31,8 +31,8 @@ class TransactionService:
             try:
                 liquidity_service = LiquidityPoolService(db)
                 liquidity_service.reserve_funds(
-                    transaction.source_currency, 
-                    transaction.source_amount
+                    transaction.target_currency, 
+                    transaction.target_amount
                 )
                 transaction.status = TransactionStatus.PROCESSING
                 db.commit()
