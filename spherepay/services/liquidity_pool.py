@@ -82,12 +82,12 @@ class LiquidityPoolService:
                 logger.error("Invalid currency pools")
                 raise HTTPException(status_code=400, detail="Invalid currency pools")
             
-            # Release reserved amount and deduct from source pool
-            source_pool.reserved_balance -= source_amount
-            source_pool.balance -= source_amount
+            # Release reserved amount and deduct from target pool
+            target_pool.reserved_balance -= target_amount
+            target_pool.balance -= target_amount
             
-            # Add to target pool
-            target_pool.balance += target_amount
+            # Add to source pool
+            source_pool.balance += source_amount
             
             self.db.commit()
             logger.info(
@@ -105,13 +105,13 @@ class LiquidityPoolService:
         since = datetime.now(UTC) - timedelta(hours=hours)
         
         # Get transaction volumes
-        outgoing = self.db.query(func.sum(Transaction.source_amount))\
-            .filter(Transaction.source_currency == currency)\
+        outgoing = self.db.query(func.sum(Transaction.target_amount))\
+            .filter(Transaction.target_currency == currency)\
             .filter(Transaction.created_at >= since)\
             .scalar() or Decimal('0')
             
-        incoming = self.db.query(func.sum(Transaction.target_amount))\
-            .filter(Transaction.target_currency == currency)\
+        incoming = self.db.query(func.sum(Transaction.source_amount))\
+            .filter(Transaction.source_currency == currency)\
             .filter(Transaction.created_at >= since)\
             .scalar() or Decimal('0')
             
@@ -180,22 +180,21 @@ class LiquidityPoolService:
                 for other_currency, other_metric in metrics.items():
                     if (other_currency != currency and 
                         other_metric['utilization_rate'] < config.REBALANCE_LOW_UTILIZATION):
-                        # Calculate required amount in target currency (currency)
+                        # Calculate required amount in target currency
                         target_required = abs(metric['net_flow']) * config.REBALANCE_BUFFER_MULTIPLIER
                         
-                        # Convert to source currency (other_currency)
+                        # Convert to source currency
                         rate = fx_service.get_latest_rate(currency, other_currency)
                         source_required = target_required * Decimal(str(rate.rate))
                         
-                        # Get source pool's available balance
                         source_pool = self.db.query(LiquidityPool)\
                             .filter(LiquidityPool.currency == other_currency)\
                             .first()
                         
-                        # Limit transfer amount to available balance
+                        # Don't transfer more than 50% of source pool
                         transfer_amount = min(
-                            source_required,  # Now this is in source currency
-                            source_pool.balance * Decimal('0.5')  # Don't transfer more than 50% of source pool
+                            source_required,
+                            source_pool.balance * Decimal('0.5')
                         )
                         
                         if transfer_amount > 0:
