@@ -9,6 +9,11 @@ Install dependencies:
    poetry install
    ```
 
+Start the database:
+   ```bash
+   docker compose up -d
+   ```
+
 Set up the database:
    ```bash
    alembic upgrade head
